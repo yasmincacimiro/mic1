@@ -4,31 +4,33 @@
 
 // Tipos
 
-typedef unsigned char byte; // 8 bits
-typedef unsigned int palavra; // 32 bits
-typedef unsigned long int microinstrucao; // 64 bits, no caso de acordo com a aquitetura cada microinstrução usa apenas 36bits de espaço 
+typedef unsigned char byte; // 8 bits - usado para representar um único caractere ou byte da memória
+typedef unsigned int palavra; // 32 bits - usado para representar dados maiores, como endereços
+typedef unsigned long int microinstrucao; // 64 bits - representa instruções de controle com até 36 bits úteis
 
-// Registradores 
+// Registradores de Memória
 
 palavra MAR = 0, MDR = 0, PC = 0; // Acesso da Memoria
 byte MBR = 0;			  // Acesso da Memoria
 
+// Registradores da ULA
 palavra SP = 0, LV = 0, TOS = 0, // Operação da ULA 
 		OPC = 0, CPP = 0, H = 0; // Operação da ULA 
 
+// Registrador de Controle
 microinstrucao MIR; // Contem a Microinstrução Atual
 palavra MPC = 0; // Contem o endereco para a proxima Microinstrução
 
 // Barramentos
 
-palavra Barramento_B, Barramento_C;
+palavra Barramento_B, Barramento_C; // Comunicação entre registradores
 
 // Flip-Flops
 
-byte N, Z;
+byte N, Z; // Sinais da ULA (Negativo, Zero)
 
 // Auxiladores para Decodificar Microinstrução
-
+// Renomear MIR_B, MIR_C, etc., para nomes mais intuitivos como campoB, campoC, campoMEM, se possível.
 byte MIR_B, MIR_Operacao, MIR_Deslocador, MIR_MEM, MIR_pulo;
 palavra MIR_C;
 
@@ -62,21 +64,21 @@ void binario(void* valor, int tipo);
 int main(int argc, const char *argv[]){
 	carregar_microprogram_de_controle();
 	carregar_programa(argv[1]);
-	while(1){
-		exibir_processos();
-		MIR = Armazenamento[MPC];
-
-		
-		decodificar_microinstrucao();
-		atribuir_barramento_B();
-		realizar_operacao_ALU();
-		atribuir_barramento_C();
-		operar_memoria();
-		pular();
-	}
-
-	return 0;
+	
+    while (1) {
+        MIR = Armazenamento[MPC];
+        decodificar_microinstrucao();
+        atribuir_barramento_B();
+        realizar_operacao_ALU();
+        atribuir_barramento_C();
+        operar_memoria();
+        pular();
+        exibir_processos();
+        sleep(1); // Aguarda 1 segundo entre ciclos
+    }
+    return 0;
 }
+
 
 // Implementação das Funções
 
@@ -109,16 +111,14 @@ void carregar_programa(const char* prog){
 	}
 }
 
-void decodificar_microinstrucao(){
-	MIR_B = (MIR) & 0b1111;
-	MIR_MEM = (MIR >> 4) & 0b111;
-	MIR_C = (MIR >> 7) & 0b111111111;
-	MIR_Operacao = (MIR >> 16) & 0b111111;
-	MIR_Deslocador = (MIR >> 22) & 0b11;
-	MIR_pulo = (MIR >> 24) & 0b111;
-	MPC = (MIR >> 27) & 0b111111111;
+void decodificar_microinstrucao() {
+    MIR_B = MIR & 0b1111;                // bits 0–3
+    MIR_C = (MIR >> 4) & 0b111111;       // bits 4–9
+    MIR_MEM = (MIR >> 10) & 0b11;        // bits 10–11
+    MIR_ULA = (MIR >> 12) & 0b1111;      // bits 12–15
+    MIR_JAM = (MIR >> 16) & 0b111;       // bits 16–18
+    MIR_Next = (MIR >> 19) & 0b111111111; // bits 19–27
 }
-
 void atribuir_barramento_B(){
 	switch(MIR_B){
 		case 0: Barramento_B = MDR;				break;
@@ -175,15 +175,15 @@ void realizar_operacao_ALU(){
 }
 
 void atribuir_barramento_C(){
-	if(MIR_C & 0b000000001)   MAR = Barramento_C;
-	if(MIR_C & 0b000000010)   MDR = Barramento_C;
-	if(MIR_C & 0b000000100)   PC  = Barramento_C;
-	if(MIR_C & 0b000001000)   SP  = Barramento_C;
-	if(MIR_C & 0b000010000)   LV  = Barramento_C;
-	if(MIR_C & 0b000100000)   CPP = Barramento_C;
-	if(MIR_C & 0b001000000)   TOS = Barramento_C;
-	if(MIR_C & 0b010000000)   OPC = Barramento_C;
-	if(MIR_C & 0b100000000)   H   = Barramento_C;
+	if (MIR_C & 0b000000001)   MAR = Barramento_C;
+	if (MIR_C & 0b000000010)   MDR = Barramento_C;
+	if (MIR_C & 0b000000100)   PC  = Barramento_C;
+	if (MIR_C & 0b000001000)   SP  = Barramento_C;
+	if (MIR_C & 0b000010000)   LV  = Barramento_C;
+	if (MIR_C & 0b000100000)   CPP = Barramento_C;
+	if (MIR_C & 0b001000000)   TOS = Barramento_C;
+	if (MIR_C & 0b010000000)   OPC = Barramento_C;
+	if (MIR_C & 0b100000000)   H   = Barramento_C;
 }
 
 void operar_memoria(){
@@ -199,9 +199,9 @@ void pular(){
 	if(MIR_pulo & 0b100) MPC = MPC | (MBR);
 }
 
-void exibir_processos(){
+void exibir_processos() {
 
-	if(LV && SP){
+	if(LV && SP) {
 		printf("\t\t  PILHA DE OPERANDOS\n");
 		printf("========================================\n");
 		printf("     END");
